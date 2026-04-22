@@ -1,6 +1,7 @@
 package main
 
 import (
+    "context"
     "os"
 
     "dev.paultergust/devices-api/internal/db"
@@ -16,13 +17,14 @@ import (
 func main() {
     log := logger.New()
 
-    pool, err := db.NewPool()
+    pool, err := db.NewPoolWithRetry(context.Background())
     if err != nil {
         log.Fatal().Err(err).Msg("db connection failed")
     }
 
-    err = db.RunMigrations(os.Getenv("DATABASE_URL"))
-    if err != nil && err.Error() != "no change" {
+    dbURL := os.Getenv("DATABASE_URL")
+
+    if err := db.RunMigrations(dbURL); err != nil {
         log.Fatal().Err(err).Msg("migration failed")
     }
 
@@ -34,12 +36,11 @@ func main() {
     r.Use(middleware.Logger(log))
     r.Use(gin.Recovery())
 
+    r.POST("/devices", h.CreateDevice)
     r.GET("/devices", h.ListDevices)
-	r.POST("/devices", h.CreateDevice)
-	r.GET("/devices", h.ListDevices)
-	r.GET("/devices/:id", h.GetDevice)
-	r.PATCH("/devices/:id", h.UpdateDevice)
-	r.DELETE("/devices/:id", h.DeleteDevice)
+    r.GET("/devices/:id", h.GetDevice)
+    r.PATCH("/devices/:id", h.UpdateDevice)
+    r.DELETE("/devices/:id", h.DeleteDevice)
 
     r.Run(":8080")
 }
