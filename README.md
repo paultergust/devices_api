@@ -89,11 +89,13 @@ The API uses:
 DATABASE_URL=postgres://user:pass@localhost:5432/devices?sslmode=disable
 ```
 
-For repository tests:
+Repository tests use a separate database in the same Postgres instance:
 
 ```
-TEST_DATABASE_URL=postgres://user:pass@localhost:5432/devices?sslmode=disable
+TEST_DATABASE_URL=postgres://user:pass@localhost:5432/devices_test?sslmode=disable
 ```
+
+The `devices_test` database is created automatically via the init script mounted in the Postgres container.
 
 ## API endpoints
 
@@ -127,6 +129,54 @@ Delete device
 DELETE /devices/:id
 ```
 
+## Example requests
+
+Create a device:
+
+```bash
+curl -X POST http://localhost:8080/devices \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "iPhone 15",
+    "brand": "Apple",
+    "state": "available"
+  }'
+```
+
+List all devices:
+
+```bash
+curl http://localhost:8080/devices
+```
+
+Filter by brand:
+
+```bash
+curl "http://localhost:8080/devices?brand=Apple"
+```
+
+Filter by state:
+
+```bash
+curl "http://localhost:8080/devices?state=available"
+```
+
+Update a device:
+
+```bash
+curl -X PATCH http://localhost:8080/devices/<device-id> \
+  -H "Content-Type: application/json" \
+  -d '{
+    "state": "inactive"
+  }'
+```
+
+Delete a device:
+
+```bash
+curl -X DELETE http://localhost:8080/devices/<device-id>
+```
+
 ## Business rules
 
 * A device in use cannot have its name or brand updated
@@ -157,25 +207,25 @@ This will:
 
 * start the database
 * wait until it is ready
-* run migrations
+* run migrations on the test database
 * execute repository tests
 
 ## Project structure
 
 ```
-cmd/api            entrypoint
-internal/handler   HTTP layer
-internal/service   business logic
+cmd/api             entrypoint
+internal/handler    HTTP layer
+internal/service    business logic
 internal/repository database access
-internal/model     domain models
-internal/dto       request/response types
-internal/db        database setup and migrations
+internal/model      domain models
+internal/dto        request/response types
+internal/db         database setup and migrations
 internal/middleware logging middleware
 ```
 
 ## Notes
 
-* Repository tests require a running PostgreSQL instance
+* Repository tests use a separate `devices_test` database
 * Migrations are located in the `migrations` directory
 * Logging is configured via zerolog and can be adjusted with environment variables
 
