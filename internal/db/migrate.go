@@ -1,6 +1,7 @@
 package db
 
 import (
+    "errors"
     "fmt"
 
     "github.com/golang-migrate/migrate/v4"
@@ -8,9 +9,13 @@ import (
     _ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
+var (
+    ErrMigrationFailed    = errors.New("migration failed")
+)
+
 func RunMigrations(databaseURL string) error {
     if databaseURL == "" {
-        return fmt.Errorf("DATABASE_URL is empty")
+        return ErrMissingDatabaseURL
     }
 
     m, err := migrate.New(
@@ -18,12 +23,19 @@ func RunMigrations(databaseURL string) error {
         databaseURL,
     )
     if err != nil {
-        return err
+        return fmt.Errorf("initialize migrate instance: %w", err)
     }
 
-    err = m.Up()
-    if err != nil && err.Error() != "no change" {
-        return err
+    // Ensure resources are cleaned up
+    defer func() {
+        _, _ = m.Close()
+    }()
+
+    if err := m.Up(); err != nil {
+        if errors.Is(err, migrate.ErrNoChange) {
+            return nil
+        }
+        return fmt.Errorf("%w: %v", ErrMigrationFailed, err)
     }
 
     return nil

@@ -1,87 +1,134 @@
 package service
 
 import (
-    "context"
-    "errors"
-    "time"
+	"context"
+	"errors"
+	"fmt"
+	"time"
 
-    "dev.paultergust/devices-api/internal/dto"
-    "dev.paultergust/devices-api/internal/model"
-    "dev.paultergust/devices-api/internal/repository"
+	"dev.paultergust/devices-api/internal/dto"
+	"dev.paultergust/devices-api/internal/model"
+	"dev.paultergust/devices-api/internal/repository"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
+)
+
+var (
+	ErrNotFound       = errors.New("device not found")
+	ErrInvalidUpdate  = errors.New("invalid device update")
+	ErrInvalidDelete  = errors.New("invalid device delete")
+	ErrInvalidState   = errors.New("invalid device state")
 )
 
 type DeviceService struct {
-    repo *repository.DeviceRepository
+	repo *repository.DeviceRepository
 }
 
 func NewDeviceService(r *repository.DeviceRepository) *DeviceService {
-    return &DeviceService{repo: r}
+	return &DeviceService{repo: r}
 }
 
 func (s *DeviceService) Create(ctx context.Context, req dto.CreateDeviceRequest) (*model.Device, error) {
-    d := &model.Device{
-        ID:        uuid.New(),
-        Name:      req.Name,
-        Brand:     req.Brand,
-        State:     model.DeviceState(req.State),
-        CreatedAt: time.Now(),
-    }
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidState, err)
+	}
 
-    if err := s.repo.Create(ctx, d); err != nil {
-        return nil, err
-    }
+	d := &model.Device{
+		ID:        uuid.New(),
+		Name:      req.Name,
+		Brand:     req.Brand,
+		State:     model.DeviceState(req.State),
+		CreatedAt: time.Now(),
+	}
 
-    return d, nil
+	if err := s.repo.Create(ctx, d); err != nil {
+		return nil, fmt.Errorf("create device: %w", err)
+	}
+
+	return d, nil
 }
 
 func (s *DeviceService) Get(ctx context.Context, id uuid.UUID) (*model.Device, error) {
-    return s.repo.GetByID(ctx, id)
+	d, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	return d, nil
 }
 
 func (s *DeviceService) List(ctx context.Context, brand, state *string) ([]model.Device, error) {
-    return s.repo.List(ctx, brand, state)
+	if state != nil {
+		if err := validateState(*state); err != nil {
+			return nil, err
+		}
+	}
+
+	devices, err := s.repo.List(ctx, brand, state)
+	if err != nil {
+		return nil, fmt.Errorf("list devices: %w", err)
+	}
+
+	return devices, nil
 }
 
 func (s *DeviceService) Update(ctx context.Context, id uuid.UUID, req dto.UpdateDeviceRequest) (*model.Device, error) {
-    d, err := s.repo.GetByID(ctx, id)
-    if err != nil {
-        return nil, err
-    }
+	d, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
 
-    if d.State == model.StateInUse {
-        if req.Name != nil || req.Brand != nil {
-            return nil, errors.New("cannot update name or brand when device is in use")
-        }
-    }
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidUpdate, err)
+	}
 
-    if req.Name != nil {
-        d.Name = *req.Name
-    }
-    if req.Brand != nil {
-        d.Brand = *req.Brand
-    }
-    if req.State != nil {
-        d.State = model.DeviceState(*req.State)
-    }
+	// business rule
+	if d.State == model.StateInUse {
+		if req.Name != nil || req.Brand != nil {
+			return nil, fmt.Errorf("%w: cannot update name or brand when device is in use", ErrInvalidUpdate)
+		}
+	}
 
-    if err := s.repo.Update(ctx, d); err != nil {
-        return nil, err
-    }
+	if req.Name != nil {
+		d.Name = *req.Name
+	}
+	if req.Brand != nil {
+		d.Brand = *req.Brand
+	}
+	if req.State != nil {
+		d.State = model.DeviceState(*req.State)
+	}
 
-    return d, nil
+	if err := s.repo.Update(ctx, d); err != nil {
+		return nil, fmt.Errorf("update device: %w", err)
+	}
+
+	return d, nil
 }
 
 func (s *DeviceService) Delete(ctx context.Context, id uuid.UUID) error {
-    d, err := s.repo.GetByID(ctx, id)
-    if err != nil {
-        return err
-    }
+	d, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
 
-    if d.State == model.StateInUse {
-        return errors.New("cannot delete device in use")
-    }
+	// business rule
+	if d.State == model.StateInUse {
+		return fmt.Errorf("%w: cannot delete device in use", ErrInvalidDelete)
+	}
 
-    return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete device: %w", err)
+	}
+
+	return nil
+}
+
+// internal helper
+func validateState(s string) error {
+	switch model.DeviceState(s) {
+	case model.StateAvailable, model.StateInUse, model.StateInactive:
+		return nil
+	default:
+		return ErrInvalidState
+	}
 }
