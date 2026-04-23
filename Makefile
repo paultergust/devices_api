@@ -3,7 +3,7 @@ API_DIR=./cmd/api
 REPO_TEST_DIR=./internal/repository
 
 DATABASE_URL?=postgres://user:pass@localhost:5432/devices?sslmode=disable
-TEST_DATABASE_URL?=postgres://user:pass@localhost:5432/devices?sslmode=disable
+TEST_DATABASE_URL?=postgres://user:pass@localhost:5432/devices_test?sslmode=disable
 
 .PHONY: help build run dev test test-unit test-repo test-cover fmt vet tidy lint clean \
 	docker-up docker-down docker-build logs db-up api-up migrate-up migrate-down \
