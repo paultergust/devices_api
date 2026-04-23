@@ -8,7 +8,6 @@ import (
 
 	"dev.paultergust/devices-api/internal/dto"
 	"dev.paultergust/devices-api/internal/model"
-	"dev.paultergust/devices-api/internal/repository"
 
 	"github.com/google/uuid"
 )
@@ -20,11 +19,19 @@ var (
 	ErrInvalidState   = errors.New("invalid device state")
 )
 
-type DeviceService struct {
-	repo *repository.DeviceRepository
+type deviceRepository interface {
+	Create(ctx context.Context, d *model.Device) error
+	GetByID(ctx context.Context, id uuid.UUID) (*model.Device, error)
+	List(ctx context.Context, brand, state *string) ([]model.Device, error)
+	Update(ctx context.Context, d *model.Device) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-func NewDeviceService(r *repository.DeviceRepository) *DeviceService {
+type DeviceService struct {
+	repo deviceRepository
+}
+
+func NewDeviceService(r deviceRepository) *DeviceService {
 	return &DeviceService{repo: r}
 }
 

@@ -1,23 +1,33 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"dev.paultergust/devices-api/internal/dto"
+	"dev.paultergust/devices-api/internal/model"
 	"dev.paultergust/devices-api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+type deviceService interface {
+	Create(ctx context.Context, req dto.CreateDeviceRequest) (*model.Device, error)
+	Get(ctx context.Context, id uuid.UUID) (*model.Device, error)
+	List(ctx context.Context, brand, state *string) ([]model.Device, error)
+	Update(ctx context.Context, id uuid.UUID, req dto.UpdateDeviceRequest) (*model.Device, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+}
 
 type Handler struct {
-	svc *service.DeviceService
+	svc deviceService
 }
 
-func NewHandler(s *service.DeviceService) *Handler {
+func NewHandler(s deviceService) *Handler {
 	return &Handler{svc: s}
 }
+
 
 // central error → HTTP mapping
 func handleError(c *gin.Context, err error) {
